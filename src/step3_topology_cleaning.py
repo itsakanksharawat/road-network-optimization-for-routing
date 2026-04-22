@@ -1,91 +1,126 @@
-import osmnx as ox
-import networkx as nx
-import math
+import os
 import time
+import osmnx as ox
 
 # -------------------------
 # CONFIG
 # -------------------------
-RAW_GRAPH_PATH = "data/raw/dehradun_raw.graphml"
-OUTPUT_PATH = "data/cleaned/dehradun_cleaned.graphml"
+INPUT_PATH = "data/processed/preprocessed.graphml"
+OUTPUT_DIR = "data/cleaned"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-MIN_EDGE_LENGTH = 5.0       # meters (remove nonsense segments)
-MERGE_DISTANCE = 10.0       # meters (merge close intersections)
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, "dehradun_cleaned.graphml")
 
-# -------------------------
-# Helpers
-# -------------------------
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = phi2 - phi1
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dl/2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+MIN_EDGE_LENGTH = 5.0  # meters
 
 # -------------------------
 # Load graph
 # -------------------------
 start = time.time()
-G = ox.load_graphml(RAW_GRAPH_PATH)
 
-print("Original nodes:", len(G.nodes))
-print("Original edges:", len(G.edges))
+print("[INFO] Loading preprocessed graph...")
+G = ox.load_graphml(INPUT_PATH)
 
-# -------------------------
-# 1️⃣ REMOVE MICRO EDGES
-# -------------------------
-edges_to_remove = []
+before_nodes = len(G.nodes)
+before_edges = len(G.edges)
 
-for u, v, k, data in G.edges(keys=True, data=True):
-    length = data.get("length", 0)
-    if length < MIN_EDGE_LENGTH:
-        edges_to_remove.append((u, v, k))
-
-for u, v, k in edges_to_remove:
-    if G.has_edge(u, v, k):
-        G.remove_edge(u, v, k)
-
-print("Removed micro edges:", len(edges_to_remove))
+print(f"[INFO] Nodes before: {before_nodes}")
+print(f"[INFO] Edges before: {before_edges}")
 
 # -------------------------
-# 2️⃣ MERGE CLOSE INTERSECTIONS
+# 1️⃣ Remove micro edges
 # -------------------------
-nodes = list(G.nodes(data=True))
-merged = set()
+print("[INFO] Removing micro edges...")
 
-for i in range(len(nodes)):
-    n1, d1 = nodes[i]
-    if n1 in merged:
-        continue
+edges_to_remove = [
+    (u, v, k)
+    for u, v, k, d in G.edges(keys=True, data=True)
+    if d.get("length", 0) < MIN_EDGE_LENGTH
+]
 
-    for j in range(i+1, len(nodes)):
-        n2, d2 = nodes[j]
-        if n2 in merged:
+G.remove_edges_from(edges_to_remove)
+
+print(f"[INFO] Removed {len(edges_to_remove)} micro edges")
+
+# -------------------------
+# 2️⃣ Simplify degree-2 nodes (CORE LOGIC)
+# -------------------------
+print("[INFO] Simplifying degree-2 nodes...")
+
+def simplify_degree_2_nodes(G):
+    nodes = list(G.nodes())
+
+    for node in nodes:
+        if node not in G:
             continue
 
-        dist = haversine(d1["y"], d1["x"], d2["y"], d2["x"])
-        if dist <= MERGE_DISTANCE:
-            # Redirect edges
-            for u, v, k, data in list(G.edges(n2, keys=True, data=True)):
-                G.add_edge(n1, v, **data)
-            for u, v, k, data in list(G.in_edges(n2, keys=True, data=True)):
-                G.add_edge(u, n1, **data)
+        # Only process nodes with exactly 2 connections
+        if G.degree(node) != 2:
+            continue
 
-            if G.has_node(n2):
-                G.remove_node(n2)
-                merged.add(n2)
+        neighbors = list(G.neighbors(node))
 
-print("Merged nodes:", len(merged))
+        if len(neighbors) != 2:
+            continue
+
+        u, v = neighbors
+
+        # Avoid self-loop
+        if u == v:
+            continue
+
+        # Get edge data
+        data1 = G.get_edge_data(node, u)
+        data2 = G.get_edge_data(node, v)
+
+        if not data1 or not data2:
+            continue
+
+        # Compute combined length
+        length = 0
+        for k in data1:
+            length += data1[k].get("length", 0)
+        for k in data2:
+            length += data2[k].get("length", 0)
+
+        # Add merged edge
+        G.add_edge(u, v, length=length)
+
+        # Remove node
+        G.remove_node(node)
+
+    return G
+
+G = simplify_degree_2_nodes(G)
+
+# -------------------------
+# 3️⃣ Remove isolated nodes (cleanup)
+# -------------------------
+print("[INFO] Removing isolated nodes...")
+
+isolated = list(ox.isolated_nodes(G))
+G.remove_nodes_from(isolated)
+
+print(f"[INFO] Removed {len(isolated)} isolated nodes")
 
 # -------------------------
 # Save cleaned graph
 # -------------------------
 ox.save_graphml(G, OUTPUT_PATH)
 
+after_nodes = len(G.nodes)
+after_edges = len(G.edges)
+
 end = time.time()
 
-print("\nCLEANING COMPLETE")
-print("Cleaned nodes:", len(G.nodes))
-print("Cleaned edges:", len(G.edges))
-print("Time taken (sec):", round(end - start, 2))
+# -------------------------
+# Final Results
+# -------------------------
+print("\n[SUCCESS] CLEANING COMPLETE")
+print(f"Nodes: {before_nodes} → {after_nodes}")
+print(f"Edges: {before_edges} → {after_edges}")
+print(f"Time taken: {round(end - start, 2)} sec")
+   
+
+    
+
