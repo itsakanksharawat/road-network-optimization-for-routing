@@ -1,15 +1,13 @@
-def compare_graphs(raw_graph, clean_graph, source, target, routing_func):
-    raw_result = routing_func(raw_graph, source, target)
-    clean_result = routing_func(clean_graph, source, target)
+def compare_routes(graph, source, target, routing_func):
+    modes = ["distance", "time", "congestion", "multi"]
 
-    comparison = {
-        "raw_time": raw_result["time"],
-        "clean_time": clean_result["time"],
-        "time_improvement": raw_result["time"] / clean_result["time"] if clean_result["time"] > 0 else None,
+    results = {}
 
-        "raw_length": raw_result["length"],
-        "clean_length": clean_result["length"],
-        "length_difference": abs(raw_result["length"] - clean_result["length"])
-    }
+    for mode in modes:
+        try:
+            result = routing_func(graph, source, target, mode)
+            results[mode] = result
+        except Exception as e:
+            results[mode] = {"error": str(e)}
 
-    return raw_result, clean_result, comparison
+    return results

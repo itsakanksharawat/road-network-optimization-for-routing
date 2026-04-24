@@ -4,12 +4,12 @@ import random
 
 from pipeline.preprocessing import preprocess_graph
 from pipeline.topology_cleaning import clean_graph
-from routing.routing import run_dijkstra
-from analysis.benchmark import compare_graphs
-from analysis.validation import validate_paths
-
-# NEW IMPORT
-from visualization.plot_graph import plot_graph, plot_graph_with_path
+from routing.routing import (
+    initialize_edge_features,
+    update_traffic,
+    run_routing
+)
+from analysis.benchmark import compare_routes
 
 
 def get_largest_component(G):
@@ -20,8 +20,7 @@ def get_largest_component(G):
 def main():
     print("Downloading graph...")
 
-    # Smaller region for smooth visualization
-    raw_graph = ox.graph_from_point(
+    G = ox.graph_from_point(
         (30.3165, 78.0322),
         dist=1000,
         network_type="drive",
@@ -29,61 +28,37 @@ def main():
     )
 
     print("Preprocessing...")
-    processed_graph = preprocess_graph(raw_graph)
+    G = preprocess_graph(G)
 
-    # ✅ VISUAL 1 — RAW GRAPH
-    print("Visualizing raw graph...")
-    plot_graph(processed_graph, "Raw Graph")
+    print("Cleaning...")
+    G = clean_graph(G)
 
-    print("Cleaning topology...")
-    cleaned_graph = clean_graph(processed_graph.copy())
+    print("Ensuring connectivity...")
+    G = get_largest_component(G)
 
-    # ✅ VISUAL 2 — CLEAN GRAPH
-    print("Visualizing cleaned graph...")
-    plot_graph(cleaned_graph, "Cleaned Graph")
+    print("Initializing edge features...")
+    G = initialize_edge_features(G)
 
-    # Ensure connectivity
-    processed_graph = get_largest_component(processed_graph)
-    cleaned_graph = get_largest_component(cleaned_graph)
-
-    nodes = list(cleaned_graph.nodes)
-
-    if len(nodes) < 2:
-        print("Graph too small after cleaning.")
-        return
-
+    nodes = list(G.nodes)
     source, target = random.sample(nodes, 2)
 
-    print("Running benchmark...")
+    print("Running normal traffic routing...")
+    normal_results = compare_routes(G, source, target, run_routing)
 
-    raw_res, clean_res, comp = compare_graphs(
-        processed_graph,
-        cleaned_graph,
-        source,
-        target,
-        run_dijkstra
-    )
+    print("Updating to peak traffic...")
+    update_traffic(G, peak=True)
 
-    # ✅ VISUAL 3 — PATHS (MOST IMPORTANT)
-    print("Visualizing paths...")
-    plot_graph_with_path(processed_graph, raw_res["path"], "Raw Graph Path")
-    plot_graph_with_path(cleaned_graph, clean_res["path"], "Clean Graph Path")
+    print("Running peak traffic routing...")
+    peak_results = compare_routes(G, source, target, run_routing)
 
-    validation = validate_paths(raw_res, clean_res)
+    print("\n--- NORMAL TRAFFIC ---")
+    for k, v in normal_results.items():
+        print(k, ":", v)
 
-    print("\n--- RAW GRAPH ---")
-    print(raw_res)
-
-    print("\n--- CLEAN GRAPH ---")
-    print(clean_res)
-
-    print("\n--- COMPARISON ---")
-    print(comp)
-
-    print("\n--- VALIDATION ---")
-    print(validation)
+    print("\n--- PEAK TRAFFIC ---")
+    for k, v in peak_results.items():
+        print(k, ":", v)
 
 
 if __name__ == "__main__":
     main()
-    
