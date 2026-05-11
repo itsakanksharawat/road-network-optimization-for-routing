@@ -1,12 +1,12 @@
-## 🚀 Road Network Optimization & Routing Evaluation System
+##  Road Network Optimization & Routing Evaluation System
 
-## 📌 Problem
+##  Problem
 Raw road network data from OpenStreetMap contains excessive node density due to micro-segmentation and mapping artifacts. This significantly increases computational cost for routing and large-scale simulations without improving accuracy.
 
 
 ---
 
-## 🚀 Solution
+##  Solution
 
 This project builds a **graph simplification and evaluation pipeline** that reduces structural complexity while preserving routing correctness.
 
@@ -33,7 +33,7 @@ Performance & Accuracy Analysis
 
 ---
 
-## 📊 Results
+##  Results
 
 ### Graph Reduction
 - Nodes: 373,126 → 82,450 (~78% reduction)
@@ -49,20 +49,20 @@ Performance & Accuracy Analysis
 
 ---
 
-## 🧠 Key Insight
+##  Key Insight
 Naive graph simplification can break connectivity and routing correctness.  
 This project ensures **routing-safe simplification** by operating on the largest connected component and validating path consistency.
 
 ---
 
-## 📸 Visualization
+##  Visualization
 - Raw graph (high density)
 - Cleaned graph (simplified topology)
 - Shortest path comparison (before vs after)
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 - Python
 - OSMnx
 - NetworkX
@@ -70,7 +70,7 @@ This project ensures **routing-safe simplification** by operating on the largest
 
 ---
 
-## ▶️ How to Run
+##  How to Run
 
 ```bash
 python main.py
